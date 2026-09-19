@@ -1,0 +1,6 @@
+{
+  "name": "مركز الفيصل لطب الأسنان",
+  "description": "نظام احترافي متكامل لإدارة مركز الفيصل لطب الأسنان وإدارة المرضى والحالات والمحاسبة والمختبر والأطباء والتقارير",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
