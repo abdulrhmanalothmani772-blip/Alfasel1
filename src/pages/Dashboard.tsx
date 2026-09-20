@@ -7,6 +7,7 @@ import {
   ClinicExpense,
   ClinicSettings,
   User,
+  Branch,
 } from '../types';
 import { formatCurrency, convertToYER } from '../lib/calc';
 import {
@@ -23,6 +24,8 @@ import {
   CheckCircle2,
   Clock,
   Printer,
+  Building2,
+  Sparkles,
 } from 'lucide-react';
 import {
   BarChart,
@@ -46,6 +49,9 @@ interface DashboardProps {
   labExpenses: LabExpense[];
   clinicExpenses: ClinicExpense[];
   settings: ClinicSettings;
+  branches?: Branch[];
+  activeBranchId?: string;
+  onSelectBranch?: (branchId: string) => void;
   onNavigate: (tab: any) => void;
   onSelectCaseToPrint: (dentalCase: DentalCase) => void;
 }
@@ -58,47 +64,84 @@ export const Dashboard: React.FC<DashboardProps> = ({
   labExpenses,
   clinicExpenses,
   settings,
+  branches = [],
+  activeBranchId = 'all',
+  onSelectBranch,
   onNavigate,
   onSelectCaseToPrint,
 }) => {
+  const [branchFilter, setBranchFilter] = useState<string>(activeBranchId || 'all');
+
+  const handleBranchChange = (branchId: string) => {
+    setBranchFilter(branchId);
+    if (onSelectBranch) {
+      onSelectBranch(branchId);
+    }
+  };
+
+  // Filter datasets by branch if a specific branch is selected
+  const branchCases = cases.filter((c) => {
+    if (branchFilter === 'all') return true;
+    return (
+      c.branchId === branchFilter ||
+      (!c.branchId && branches.find((b) => b.id === branchFilter)?.isMain)
+    );
+  });
+
+  const branchLabExpenses = labExpenses.filter((l) => {
+    if (branchFilter === 'all') return true;
+    return (
+      l.branchId === branchFilter ||
+      (!l.branchId && branches.find((b) => b.id === branchFilter)?.isMain)
+    );
+  });
+
+  const branchClinicExpenses = clinicExpenses.filter((e) => {
+    if (branchFilter === 'all') return true;
+    return (
+      e.branchId === branchFilter ||
+      (!e.branchId && branches.find((b) => b.id === branchFilter)?.isMain)
+    );
+  });
+
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Calculations
-  const todayCases = cases.filter((c) => c.date === todayStr);
+  // Calculations based on filtered branch data
+  const todayCases = branchCases.filter((c) => c.date === todayStr);
 
   const todayIncomeYER = todayCases.reduce(
     (sum, c) => sum + convertToYER(c.paidAmount, c.currency, settings),
     0
   );
 
-  const totalIncomeYER = cases.reduce(
+  const totalIncomeYER = branchCases.reduce(
     (sum, c) => sum + convertToYER(c.paidAmount, c.currency, settings),
     0
   );
 
-  const totalLabExpensesYER = labExpenses.reduce(
+  const totalLabExpensesYER = branchLabExpenses.reduce(
     (sum, l) => sum + convertToYER(l.amount, l.currency, settings),
     0
   );
 
-  const totalClinicExpensesYER = clinicExpenses.reduce(
+  const totalClinicExpensesYER = branchClinicExpenses.reduce(
     (sum, e) => sum + convertToYER(e.amount, e.currency, settings),
     0
   );
 
-  const totalRemainingDebtsYER = cases.reduce(
+  const totalRemainingDebtsYER = branchCases.reduce(
     (sum, c) => sum + convertToYER(c.remainingAmount, c.currency, settings),
     0
   );
 
-  const totalClinicNetProfitYER = cases.reduce(
+  const totalClinicNetProfitYER = branchCases.reduce(
     (sum, c) => sum + convertToYER(c.clinicShare, c.currency, settings),
     0
   );
 
   // Doctors income distribution for PieChart
   const doctorStats = doctors.map((doc, idx) => {
-    const docCases = cases.filter((c) => c.doctorId === doc.id);
+    const docCases = branchCases.filter((c) => c.doctorId === doc.id);
     const docTotalEarned = docCases.reduce(
       (sum, c) => sum + convertToYER(c.doctorShare, c.currency, settings),
       0
@@ -117,7 +160,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const d = new Date();
     d.setDate(d.getDate() - (6 - i));
     const dStr = d.toISOString().split('T')[0];
-    const dayCases = cases.filter((c) => c.date === dStr);
+    const dayCases = branchCases.filter((c) => c.date === dStr);
     const income = dayCases.reduce(
       (sum, c) => sum + convertToYER(c.paidAmount, c.currency, settings),
       0
@@ -133,37 +176,56 @@ export const Dashboard: React.FC<DashboardProps> = ({
     };
   });
 
+  const currentBranchName =
+    branchFilter === 'all'
+      ? 'كافة الفروع المستقلة (مركز موحد)'
+      : branches.find((b) => b.id === branchFilter)?.name || 'الفرع المحدد';
+
   return (
     <div className="space-y-6 animate-in fade-in">
-      {/* Welcome Banner */}
-      <div className="bg-gradient-to-l from-slate-900 via-cyan-950 to-slate-900 rounded-3xl p-6 border border-cyan-900/50 shadow-xl text-white flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-cyan-400 font-bold text-sm">مركز الفيصل لطب الأسنان</span>
-            <span className="bg-cyan-500/20 text-cyan-300 text-[11px] px-2.5 py-0.5 rounded-full font-bold">
-              لوحة التحكم الشاملة
+      {/* Welcome Banner with Executive Dr. Marwan Al-Ameri Branding */}
+      <div className="bg-gradient-to-l from-slate-950 via-cyan-950 to-slate-900 rounded-3xl p-6 sm:p-7 border border-cyan-800/40 shadow-xl text-white flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden">
+        <div className="relative z-10">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="text-cyan-400 font-extrabold text-sm">
+              مركز الفيصل التخصصي لطب وجراحة الأسنان
+            </span>
+            <span className="bg-cyan-500/20 text-cyan-300 text-[11px] px-2.5 py-0.5 rounded-full font-bold border border-cyan-400/30 flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-cyan-300" />
+              <span>نظام خبير متكامل 20 عاماً</span>
             </span>
           </div>
-          <h2 className="text-xl sm:text-2xl font-black text-white">
-            مرحباً بك، {currentUser.fullName}
-          </h2>
-          <p className="text-xs text-slate-300 mt-1">
-            حركة العيادة ليوم{' '}
-            {new Date().toLocaleDateString('ar-YE', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </p>
+
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-400 to-cyan-700 text-slate-950 font-black text-lg flex items-center justify-center shadow-lg shadow-cyan-500/20">
+              د.م
+            </div>
+            <div>
+              <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
+                <span>مرحباً، د. مروان العامري</span>
+                <span className="text-xs bg-amber-400 text-slate-950 px-2 py-0.5 rounded-lg font-bold">
+                  مدير الفرع
+                </span>
+              </h2>
+              <p className="text-xs text-slate-300 mt-0.5">
+                متابعة حركة فرع: <strong className="text-cyan-300">{currentBranchName}</strong> •{' '}
+                {new Date().toLocaleDateString('ar-YE', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Quick action buttons */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 relative z-10">
           <button
             type="button"
             onClick={() => onNavigate('cases')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-l from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-600/30 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-l from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-white font-bold rounded-2xl text-xs shadow-lg shadow-cyan-600/30 transition-all cursor-pointer"
           >
             <PlusCircle className="w-4 h-4" />
             <span>تسجيل حالة علاج جديدة</span>
@@ -171,19 +233,61 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <button
             type="button"
             onClick={() => onNavigate('patients')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold rounded-2xl text-xs transition-all cursor-pointer"
           >
             <Users className="w-4 h-4 text-cyan-400" />
             <span>إضافة مريض</span>
           </button>
           <button
             type="button"
-            onClick={() => onNavigate('daily-summary')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
+            onClick={() => onNavigate('branches')}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold rounded-2xl text-xs transition-all cursor-pointer"
           >
-            <Receipt className="w-4 h-4 text-amber-400" />
-            <span>الملخص اليومي</span>
+            <Building2 className="w-4 h-4 text-cyan-400" />
+            <span>إدارة الفروع</span>
           </button>
+        </div>
+      </div>
+
+      {/* Interactive Branch Switcher Strip (All Branches vs Individual Branch) */}
+      <div className="bg-white rounded-3xl p-3 border border-slate-200 shadow-xs flex items-center justify-between gap-2 overflow-x-auto">
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-700 shrink-0 px-2">
+          <Building2 className="w-4 h-4 text-cyan-600" />
+          <span>تصفية بحسب الفرع:</span>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => handleBranchChange('all')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              branchFilter === 'all'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            🏢 كافة الفروع (المركز الموحّد)
+          </button>
+
+          {branches.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => handleBranchChange(b.id)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                branchFilter === b.id
+                  ? 'bg-cyan-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <span>{b.name}</span>
+              {b.isMain && (
+                <span className="text-[9px] bg-cyan-100 text-cyan-900 px-1 py-0.2 rounded-md font-mono">
+                  رئيسي
+                </span>
+              )}
+            </button>
+          ))}
         </div>
       </div>
 

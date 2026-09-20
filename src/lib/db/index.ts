@@ -15,6 +15,7 @@ import {
   ClinicSettings,
   CasePayment,
   User,
+  Branch,
 } from '../../types';
 import {
   INITIAL_PATIENTS,
@@ -27,6 +28,7 @@ import {
   INITIAL_SETTINGS,
   INITIAL_REMINDERS,
   INITIAL_USERS,
+  INITIAL_BRANCHES,
 } from '../../data/seedData';
 
 /**
@@ -52,24 +54,26 @@ class AlFaisalDatabase extends Dexie {
   reminders!: Table<Reminder, string>;
   settings!: Table<{ key: string; value: any }, string>;
   users!: Table<User, string>;
+  branches!: Table<Branch, string>;
 
   constructor() {
     super('AlFaisalDentalCenterDB');
-    this.version(1).stores({
-      patients: 'id, name, phone, createdAt, isArchived',
+    this.version(2).stores({
+      patients: 'id, name, phone, createdAt, isArchived, branchId',
       doctors: 'id, name, status',
       doctorSettlements: 'id, doctorId, date',
       nurses: 'id, name, status',
       nurseTransactions: 'id, nurseId, date, type',
-      cases: 'id, patientId, doctorId, date, status, currency',
+      cases: 'id, patientId, doctorId, date, status, currency, branchId',
       labExpenses: 'id, caseId, date, labName',
-      clinicExpenses: 'id, date, category',
+      clinicExpenses: 'id, date, category, branchId',
       discounts: 'id, name, isActive',
       exchangeRateHistory: 'id, date',
       auditLogs: 'id, timestamp, user',
       reminders: 'id, patientId, appointmentDate, status',
       settings: 'key',
-      users: 'id, username, role',
+      users: 'id, username, role, branchId',
+      branches: 'id, name, code, manager, status',
     });
   }
 }
@@ -81,6 +85,12 @@ export const db = new AlFaisalDatabase();
  */
 export async function initializeDatabase(): Promise<void> {
   const patientCount = await db.patients.count();
+  const branchCount = await db.branches.count();
+
+  if (branchCount === 0) {
+    await db.branches.bulkAdd(INITIAL_BRANCHES);
+  }
+
   if (patientCount === 0) {
     await db.transaction('rw', [
       db.patients,
@@ -94,6 +104,7 @@ export async function initializeDatabase(): Promise<void> {
       db.reminders,
       db.auditLogs,
       db.users,
+      db.branches,
     ], async () => {
       await db.patients.bulkAdd(INITIAL_PATIENTS);
       await db.doctors.bulkAdd(INITIAL_DOCTORS);
@@ -104,6 +115,8 @@ export async function initializeDatabase(): Promise<void> {
       await db.discounts.bulkAdd(INITIAL_DISCOUNTS);
       await db.reminders.bulkAdd(INITIAL_REMINDERS);
       await db.users.bulkAdd(INITIAL_USERS);
+      await db.branches.clear();
+      await db.branches.bulkAdd(INITIAL_BRANCHES);
 
       await db.settings.put({ key: 'clinicSettings', value: INITIAL_SETTINGS });
       await db.auditLogs.add({
@@ -462,7 +475,7 @@ export async function getClinicSettings(): Promise<ClinicSettings> {
   return item ? item.value : INITIAL_SETTINGS;
 }
 
-export async function saveClinicSettings(settings: ClinicSettings, user: string): Promise<void> {
+export async function saveClinicSettings(settings: ClinicSettings, user = 'admin'): Promise<void> {
   await db.settings.put({ key: 'clinicSettings', value: settings });
   await logAudit(user, 'تحديث إعدادات المركز', 'الإعدادات العامة', 'تم حفظ أسعار الصرف وبيانات المركز');
 }
@@ -602,11 +615,21 @@ export async function deleteUserById(id: string): Promise<void> {
   await db.users.delete(id);
 }
 
-export async function authenticateUser(username: string, password?: string): Promise<User | null> {
+export async function authenticateUser(identifier: string, codeOrPass?: string): Promise<User | null> {
   const users = await db.users.toArray();
-  const found = users.find((u) => u.username === username);
+  const trimmed = identifier.trim().toLowerCase();
+  const found = users.find(
+    (u) =>
+      u.username.toLowerCase() === trimmed ||
+      (u.email && u.email.toLowerCase() === trimmed)
+  );
   if (!found) return null;
-  if (password && found.password && found.password !== password) return null;
+  if (codeOrPass !== undefined && codeOrPass !== '') {
+    const pTrimmed = codeOrPass.trim();
+    const matchesPass = found.password === pTrimmed;
+    const matchesPin = found.pinCode === pTrimmed;
+    if (!matchesPass && !matchesPin) return null;
+  }
   return found;
 }
 
@@ -733,6 +756,7 @@ export const resetDatabaseToSeed = async () => {
     await db.settings.clear();
     await db.auditLogs.clear();
     await db.users.clear();
+    await db.branches.clear();
 
     await db.patients.bulkAdd(INITIAL_PATIENTS);
     await db.doctors.bulkAdd(INITIAL_DOCTORS);
@@ -743,6 +767,44 @@ export const resetDatabaseToSeed = async () => {
     await db.discounts.bulkAdd(INITIAL_DISCOUNTS);
     await db.reminders.bulkAdd(INITIAL_REMINDERS);
     await db.users.bulkAdd(INITIAL_USERS);
+    await db.branches.bulkAdd(INITIAL_BRANCHES);
     await db.settings.put({ key: 'clinicSettings', value: INITIAL_SETTINGS });
   });
 };
+
+export const getAllBranches = async (): Promise<Branch[]> => {
+  const list = await db.branches.toArray();
+  if (list.length === 0) {
+    await db.branches.bulkAdd(INITIAL_BRANCHES);
+    return INITIAL_BRANCHES;
+  }
+  return list;
+};
+
+export const saveBranch = async (branch: Branch, user = 'admin'): Promise<void> => {
+  await db.branches.put(branch);
+  await db.auditLogs.add({
+    id: `audit-${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    user,
+    action: 'حفظ فرع',
+    target: branch.name,
+    details: `تم حفظ أو تحديث بيانات الفرع (${branch.name}) بواسطة ${user}`,
+  });
+};
+
+export const deleteBranchById = async (id: string, user = 'admin'): Promise<void> => {
+  const branch = await db.branches.get(id);
+  await db.branches.delete(id);
+  if (branch) {
+    await db.auditLogs.add({
+      id: `audit-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      user,
+      action: 'حذف فرع',
+      target: branch.name,
+      details: `تم حذف الفرع (${branch.name}) بواسطة ${user}`,
+    });
+  }
+};
+

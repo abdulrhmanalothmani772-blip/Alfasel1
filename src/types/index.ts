@@ -2,13 +2,29 @@ export type Currency = 'YER' | 'SAR' | 'USD';
 
 export type UserRole = 'admin' | 'reception';
 
+export interface Branch {
+  id: string;
+  name: string;
+  code: string;
+  city: string;
+  address: string;
+  phone: string;
+  manager: string; // e.g. "د. مروان العامري"
+  isMain?: boolean;
+  status: 'active' | 'inactive';
+}
+
 export interface User {
   id: string;
   username: string;
+  email?: string;
   password?: string;
+  pinCode?: string;
   fullName: string;
   role: UserRole;
   phone?: string;
+  branchId?: string;
+  branchName?: string;
   isActive?: boolean;
 }
 
@@ -20,6 +36,8 @@ export interface Patient {
   phone: string; // e.g. 778043029 (Yemen default 967)
   address: string;
   notes: string;
+  branchId?: string;
+  branchName?: string;
   createdAt: string; // ISO string
   createdBy: string;
   isArchived?: boolean;
@@ -29,9 +47,12 @@ export interface Doctor {
   id: string;
   name: string;
   phone: string;
+  email?: string;
   degree: string; // ماجستير، بكالوريوس، زمالة، إلخ
   specialty: string; // زراعة أسنان، تقويم، جراحة فك وتجميل، معالجة لبية
   percentage: number; // e.g. 40 means 40%
+  branchId?: string;
+  branchName?: string;
   joinedDate: string;
   status: 'active' | 'archived';
   notes?: string;
@@ -41,6 +62,8 @@ export interface DoctorSettlement {
   id: string;
   doctorId: string;
   doctorName: string;
+  branchId?: string;
+  branchName?: string;
   date: string;
   amount: number;
   currency: Currency;
@@ -52,6 +75,9 @@ export interface Nurse {
   id: string;
   name: string;
   phone: string;
+  jobTitle?: string; // e.g. "ممرضة عمليات وتخدير", "مسؤولة تعقيم", "مساعدة طبيب"
+  branchId?: string;
+  branchName?: string;
   baseSalary: number;
   currency: Currency;
   hireDate: string;
@@ -59,7 +85,13 @@ export interface Nurse {
   notes?: string;
 }
 
-export type NurseTransactionType = 'salary' | 'withdrawal' | 'bonus' | 'deduction' | 'reward';
+export type NurseTransactionType =
+  | 'salary'
+  | 'withdrawal'
+  | 'advance'
+  | 'bonus'
+  | 'deduction'
+  | 'reward';
 
 export interface NurseTransaction {
   id: string;
@@ -69,7 +101,10 @@ export interface NurseTransaction {
   amount: number;
   currency: Currency;
   date: string;
+  reason?: string; // سبب الخصم أو نوع السلفة أو بند العلاوة
   notes: string;
+  branchId?: string;
+  branchName?: string;
   createdBy: string;
 }
 
@@ -91,6 +126,8 @@ export interface DentalCase {
   patientName: string;
   doctorId: string;
   doctorName: string;
+  branchId?: string;
+  branchName?: string;
   date: string;
   diagnosis: string;
   treatment: string;
@@ -127,6 +164,8 @@ export interface LabExpense {
   currency: Currency;
   date: string;
   recordedBy: string;
+  branchId?: string;
+  branchName?: string;
 }
 
 export type ExpenseCategory =
@@ -146,6 +185,8 @@ export interface ClinicExpense {
   amount: number;
   currency: Currency;
   recordedBy: string;
+  branchId?: string;
+  branchName?: string;
 }
 
 export interface Discount {

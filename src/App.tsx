@@ -12,6 +12,7 @@ import {
   Discount,
   ClinicSettings,
   CasePayment,
+  Branch,
 } from './types';
 import {
   initializeDatabase,
@@ -43,13 +44,16 @@ import {
   getAllUsers,
   saveUser,
   deleteUserById,
-  authenticateUser,
+  getAllBranches,
+  saveBranch,
+  deleteBranch,
   recordCasePayment,
+  exportDatabaseBackup,
 } from './lib/db';
 
 // Components
 import { Navbar } from './components/Navbar';
-import { Sidebar, NavPage } from './components/Sidebar';
+import { Sidebar, NavTab } from './components/Sidebar';
 import { Toast, ToastType } from './components/Toast';
 
 // Pages
@@ -57,6 +61,7 @@ import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Patients } from './pages/Patients';
 import { Cases } from './pages/Cases';
+import { Branches } from './pages/Branches';
 import { DoctorDailySettlement } from './pages/DoctorDailySettlement';
 import { LabExpenses } from './pages/LabExpenses';
 import { Doctors } from './pages/Doctors';
@@ -90,8 +95,12 @@ export const App: React.FC = () => {
   });
 
   // Current active navigation
-  const [activePage, setActivePage] = useState<NavPage>('dashboard');
+  const [activePage, setActivePage] = useState<NavTab>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Branches state
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [activeBranchId, setActiveBranchId] = useState<string>('all');
 
   // App Data States
   const [settings, setSettings] = useState<ClinicSettings | null>(null);
@@ -149,6 +158,7 @@ export const App: React.FC = () => {
         docSetList,
         discList,
         userList,
+        branchList,
       ] = await Promise.all([
         getClinicSettings(),
         getAllPatients(),
@@ -161,6 +171,7 @@ export const App: React.FC = () => {
         getAllDoctorSettlements(),
         getAllDiscounts(),
         getAllUsers(),
+        getAllBranches(),
       ]);
 
       setSettings(s);
@@ -174,6 +185,7 @@ export const App: React.FC = () => {
       setDoctorSettlements(docSetList);
       setDiscounts(discList);
       setUsers(userList);
+      setBranches(branchList);
     } catch (error) {
       console.error('Error loading database:', error);
       showToast('حدث خطأ أثناء تحميل البيانات من قاعدة البيانات', 'error');
@@ -199,6 +211,43 @@ export const App: React.FC = () => {
     showToast('تم تسجيل الخروج بنجاح', 'info');
   };
 
+  // Branch Handlers
+  const handleAddBranch = async (branch: Branch) => {
+    await saveBranch(branch);
+    setBranches((prev) => [...prev, branch]);
+    showToast('تمت إضافة الفرع بنجاح');
+  };
+
+  const handleUpdateBranch = async (branch: Branch) => {
+    await saveBranch(branch);
+    setBranches((prev) => prev.map((b) => (b.id === branch.id ? branch : b)));
+    showToast('تم تحديث بيانات الفرع بنجاح');
+  };
+
+  const handleDeleteBranch = async (branchId: string) => {
+    await deleteBranch(branchId);
+    setBranches((prev) => prev.filter((b) => b.id !== branchId));
+    if (activeBranchId === branchId) setActiveBranchId('all');
+    showToast('تم حذف الفرع');
+  };
+
+  // Quick Backup Handler
+  const handleBackup = async () => {
+    try {
+      const json = await exportDatabaseBackup();
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `AlFaisal-Backup-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('تم تصدير النسخة الاحتياطية بنجاح');
+    } catch (e) {
+      showToast('حدث خطأ أثناء النسخ الاحتياطي', 'error');
+    }
+  };
+
   // CRUD Handlers
   const handleAddPatient = async (newPatient: Patient) => {
     await savePatient(newPatient);
@@ -213,7 +262,6 @@ export const App: React.FC = () => {
   };
 
   const handleArchivePatient = async (id: string) => {
-    // In demo, we filter or archive
     setPatients((prev) => prev.filter((p) => p.id !== id));
     showToast('تمت أرشفة سجل المريض');
   };
@@ -254,7 +302,6 @@ export const App: React.FC = () => {
   const handleAddLabExpense = async (expense: LabExpense) => {
     await saveLabExpense(expense);
     setLabExpenses((prev) => [expense, ...prev]);
-    // If linked to case, reload cases to reflect updated lab expense
     if (expense.caseId) {
       await loadData();
     }
@@ -292,6 +339,12 @@ export const App: React.FC = () => {
     showToast('تمت إضافة الممرضة بنجاح');
   };
 
+  const handleUpdateNurse = async (nurse: Nurse) => {
+    await saveNurse(nurse);
+    setNurses((prev) => prev.map((n) => (n.id === nurse.id ? nurse : n)));
+    showToast('تم تحديث بيانات الممرضة بنجاح');
+  };
+
   const handleAddNurseTransaction = async (tx: NurseTransaction) => {
     await saveNurseTransaction(tx);
     setNurseTransactions((prev) => [tx, ...prev]);
@@ -319,7 +372,7 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateSettings = async (newSettings: ClinicSettings) => {
-    await saveClinicSettings(newSettings);
+    await saveClinicSettings(newSettings, currentUser?.username || 'admin');
     setSettings(newSettings);
     showToast('تم حفظ إعدادات المركز');
   };
@@ -360,13 +413,15 @@ export const App: React.FC = () => {
 
   if (isLoadingData || !settings) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white font-sans p-4">
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white font-sans p-4" dir="rtl">
         <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <h2 className="text-lg font-bold">مركز الفيصل لطب الأسنان</h2>
-        <p className="text-xs text-slate-400 mt-1">جاري تحميل قاعدة البيانات المحلية...</p>
+        <h2 className="text-lg font-bold">مركز الفيصل لطب وجراحة الأسنان</h2>
+        <p className="text-xs text-slate-400 mt-1">جاري تشغيل قاعدة البيانات وتحميل الفروع والكوادر...</p>
       </div>
     );
   }
+
+  const unpaidCasesCount = cases.filter((c) => c.status === 'in-progress' || c.remainingAmount > 0).length;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col" dir="rtl">
@@ -374,23 +429,29 @@ export const App: React.FC = () => {
       <Navbar
         currentUser={currentUser}
         settings={settings}
-        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        branches={branches}
+        activeBranchId={activeBranchId}
+        onSelectActiveBranch={setActiveBranchId}
+        onNavigateToBranches={() => setActivePage('branches')}
         onLogout={handleLogout}
-        onNavigate={setActivePage}
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        onQuickBackup={handleBackup}
       />
 
       {/* Main Layout Body */}
       <div className="flex flex-1 overflow-hidden relative">
         {/* Sidebar */}
         <Sidebar
-          activePage={activePage}
-          currentUser={currentUser}
-          isOpen={isSidebarOpen}
-          onNavigate={(page) => {
-            setActivePage(page);
+          currentTab={activePage}
+          onSelectTab={(tab) => {
+            setActivePage(tab);
             setIsSidebarOpen(false);
           }}
+          isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
+          userRole={currentUser.role}
+          pendingRemindersCount={0}
+          unpaidCasesCount={unpaidCasesCount}
         />
 
         {/* Dynamic Page Content */}
@@ -404,7 +465,32 @@ export const App: React.FC = () => {
               clinicExpenses={clinicExpenses}
               settings={settings}
               currentUser={currentUser}
+              branches={branches}
+              activeBranchId={activeBranchId}
+              onSelectBranch={setActiveBranchId}
               onNavigate={setActivePage}
+              onSelectCaseToPrint={(c) =>
+                setActivePrint({
+                  type: 'invoice',
+                  title: `فاتورة وسند قبض - ${c.patientName}`,
+                  data: { dentalCase: c, settings },
+                })
+              }
+            />
+          )}
+
+          {activePage === 'branches' && (
+            <Branches
+              branches={branches}
+              activeBranchId={activeBranchId}
+              onSelectActiveBranch={setActiveBranchId}
+              onAddBranch={handleAddBranch}
+              onUpdateBranch={handleUpdateBranch}
+              onDeleteBranch={handleDeleteBranch}
+              cases={cases}
+              patients={patients}
+              doctors={doctors}
+              currentUser={currentUser}
             />
           )}
 
@@ -472,16 +558,16 @@ export const App: React.FC = () => {
               settings={settings}
               currentUser={currentUser}
               onRecordSettlement={handleRecordDoctorSettlement}
-              onPrintSettlement={(doc, date) =>
+              onPrintAccount={(doc, selectedDate) =>
                 setActivePrint({
                   type: 'doctorSettlement',
-                  title: doc ? `كشف تسوية أتعاب د. ${doc.name}` : 'كشف تسوية أتعاب الأطباء اليومي',
+                  title: `حساب الطبيب اليومي - د. ${doc.name}`,
                   data: {
-                    doctors: doc ? [doc] : doctors,
+                    doctors: [doc],
                     cases,
                     settlements: doctorSettlements,
                     settings,
-                    date: date || new Date().toISOString().split('T')[0],
+                    date: selectedDate,
                   },
                 })
               }
@@ -496,12 +582,12 @@ export const App: React.FC = () => {
               currentUser={currentUser}
               onAddLabExpense={handleAddLabExpense}
               onDeleteLabExpense={handleDeleteLabExpense}
-              onPrintLabReport={() =>
+              onPrintLabStatement={() =>
                 setActivePrint({
                   type: 'genericReport',
-                  title: 'تقرير مستحقات ومصروفات معامل الأسنان',
+                  title: 'كشف مصاريف وخروج معامل الأسنان',
                   data: {
-                    period: 'كافة الفترات',
+                    type: 'labs',
                     labs: labExpenses,
                   },
                 })
@@ -516,6 +602,8 @@ export const App: React.FC = () => {
               settlements={doctorSettlements}
               settings={settings}
               currentUser={currentUser}
+              branches={branches}
+              activeBranchId={activeBranchId}
               onAddDoctor={handleAddDoctor}
               onUpdateDoctor={handleUpdateDoctor}
               onArchiveDoctor={handleArchiveDoctor}
@@ -541,7 +629,10 @@ export const App: React.FC = () => {
               transactions={nurseTransactions}
               settings={settings}
               currentUser={currentUser}
+              branches={branches}
+              activeBranchId={activeBranchId}
               onAddNurse={handleAddNurse}
+              onUpdateNurse={handleUpdateNurse}
               onAddTransaction={handleAddNurseTransaction}
               onDeleteTransaction={handleDeleteNurseTransaction}
               onPrintPayslip={(nurse, monthLabel) =>
@@ -559,7 +650,7 @@ export const App: React.FC = () => {
             />
           )}
 
-          {activePage === 'expenses' && (
+          {(activePage === 'clinic-expenses' || (activePage as string) === 'expenses') && (
             <ClinicExpenses
               expenses={clinicExpenses}
               settings={settings}
@@ -607,6 +698,8 @@ export const App: React.FC = () => {
               nurseTransactions={nurseTransactions}
               settings={settings}
               currentUser={currentUser}
+              branches={branches}
+              activeBranchId={activeBranchId}
               onPrintReport={(title, data) =>
                 setActivePrint({
                   type: 'genericReport',
@@ -623,6 +716,7 @@ export const App: React.FC = () => {
               discounts={discounts}
               users={users}
               currentUser={currentUser}
+              branches={branches}
               onUpdateSettings={handleUpdateSettings}
               onAddDiscount={handleAddDiscount}
               onDeleteDiscount={handleDeleteDiscount}

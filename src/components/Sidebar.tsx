@@ -12,6 +12,7 @@ import {
   BarChart3,
   MessageCircle,
   Settings,
+  Building2,
   X,
 } from 'lucide-react';
 import { UserRole } from '../types';
@@ -20,6 +21,7 @@ export type NavTab =
   | 'dashboard'
   | 'patients'
   | 'cases'
+  | 'branches'
   | 'lab-expenses'
   | 'doctors'
   | 'doctor-settlement'
@@ -72,6 +74,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'bg-rose-500',
       roles: ['admin', 'reception'],
       highlight: true,
+    },
+    {
+      id: 'branches' as NavTab,
+      label: 'إدارة الفروع المستقلة',
+      icon: Building2,
+      roles: ['admin', 'reception'],
     },
     {
       id: 'doctor-settlement' as NavTab,

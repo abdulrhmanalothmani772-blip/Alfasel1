@@ -8,6 +8,7 @@ import {
   CasePayment,
   User,
   ClinicSettings,
+  Branch,
 } from '../types';
 import {
   calculateCaseFinancials,
@@ -32,6 +33,9 @@ import {
   Edit,
   Sparkles,
   Info,
+  Building2,
+  LayoutGrid,
+  Table as TableIcon,
 } from 'lucide-react';
 
 interface CasesProps {
@@ -41,6 +45,8 @@ interface CasesProps {
   discounts: Discount[];
   settings: ClinicSettings;
   currentUser: User;
+  branches?: Branch[];
+  activeBranchId?: string;
   onAddCase: (dentalCase: DentalCase) => Promise<void>;
   onUpdateCase: (dentalCase: DentalCase) => Promise<void>;
   onDeleteCase: (id: string) => Promise<void>;
@@ -58,6 +64,8 @@ export const Cases: React.FC<CasesProps> = ({
   discounts,
   settings,
   currentUser,
+  branches = [],
+  activeBranchId = 'all',
   onAddCase,
   onUpdateCase,
   onDeleteCase,
@@ -72,6 +80,9 @@ export const Cases: React.FC<CasesProps> = ({
   const [doctorFilter, setDoctorFilter] = useState('all');
   const [currencyFilter, setCurrencyFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [branchFilter, setBranchFilter] = useState<string>(activeBranchId || 'all');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [quickFilter, setQuickFilter] = useState<'all' | 'unpaid' | 'paid' | 'today'>('all');
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(!!preselectedPatient);
@@ -85,6 +96,9 @@ export const Cases: React.FC<CasesProps> = ({
   // Form states for Add / Edit Case
   const [patientId, setPatientId] = useState(preselectedPatient?.id || '');
   const [doctorId, setDoctorId] = useState(doctors[0]?.id || '');
+  const [caseBranchId, setCaseBranchId] = useState<string>(
+    activeBranchId && activeBranchId !== 'all' ? activeBranchId : branches[0]?.id || ''
+  );
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [diagnosis, setDiagnosis] = useState('');
   const [treatment, setTreatment] = useState('');
@@ -137,6 +151,7 @@ export const Cases: React.FC<CasesProps> = ({
     setPatientId(presetPat ? presetPat.id : patients[0]?.id || '');
     setDoctorId(doctors[0]?.id || '');
     setDoctorPercentage(doctors[0]?.percentage || 40);
+    setCaseBranchId(activeBranchId && activeBranchId !== 'all' ? activeBranchId : branches[0]?.id || '');
     setDate(new Date().toISOString().split('T')[0]);
     setDiagnosis('');
     setTreatment('');
@@ -159,6 +174,7 @@ export const Cases: React.FC<CasesProps> = ({
     setPatientId(c.patientId);
     setDoctorId(c.doctorId);
     setDoctorPercentage(c.doctorPercentage);
+    setCaseBranchId(c.branchId || branches[0]?.id || '');
     setDate(c.date);
     setDiagnosis(c.diagnosis);
     setTreatment(c.treatment);
@@ -195,6 +211,7 @@ export const Cases: React.FC<CasesProps> = ({
 
     const discountObj = discounts.find((d) => d.id === selectedDiscountId);
     const discAmount = calculatedDiscountAmount;
+    const branchObj = branches.find((b) => b.id === caseBranchId);
 
     if (editingCase) {
       const updated: DentalCase = {
@@ -203,6 +220,8 @@ export const Cases: React.FC<CasesProps> = ({
         patientName: patient.name,
         doctorId,
         doctorName: doctor.name,
+        branchId: caseBranchId,
+        branchName: branchObj?.name,
         date,
         diagnosis,
         treatment,
@@ -233,6 +252,8 @@ export const Cases: React.FC<CasesProps> = ({
         patientName: patient.name,
         doctorId,
         doctorName: doctor.name,
+        branchId: caseBranchId,
+        branchName: branchObj?.name,
         date,
         diagnosis,
         treatment,
@@ -296,6 +317,8 @@ export const Cases: React.FC<CasesProps> = ({
     setPaymentAmount('');
   };
 
+  const todayStr = new Date().toISOString().split('T')[0];
+
   const filteredCases = cases.filter((c) => {
     const q = searchQuery.trim().toLowerCase();
     if (q) {
@@ -309,8 +332,23 @@ export const Cases: React.FC<CasesProps> = ({
     if (currencyFilter !== 'all' && c.currency !== currencyFilter) return false;
     if (statusFilter !== 'all' && c.status !== statusFilter) return false;
 
+    if (branchFilter !== 'all') {
+      const matchBranch =
+        c.branchId === branchFilter ||
+        (!c.branchId && branches.find((b) => b.id === branchFilter)?.isMain);
+      if (!matchBranch) return false;
+    }
+
+    if (quickFilter === 'unpaid' && c.remainingAmount <= 0) return false;
+    if (quickFilter === 'paid' && c.remainingAmount > 0) return false;
+    if (quickFilter === 'today' && c.date !== todayStr) return false;
+
     return true;
   });
+
+  const unpaidCount = cases.filter((c) => c.remainingAmount > 0).length;
+  const paidCount = cases.filter((c) => c.remainingAmount <= 0).length;
+  const todayCount = cases.filter((c) => c.date === todayStr).length;
 
   return (
     <div className="space-y-6 animate-in fade-in">
@@ -344,9 +382,9 @@ export const Cases: React.FC<CasesProps> = ({
       </div>
 
       {/* Header bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
         <div>
-          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
             <Stethoscope className="w-5 h-5 text-cyan-600" />
             <span>سجل الحالات والمعالجات السنية</span>
           </h2>
@@ -355,27 +393,133 @@ export const Cases: React.FC<CasesProps> = ({
           </p>
         </div>
 
+        <div className="flex items-center gap-2.5">
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setViewMode('cards')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'cards'
+                  ? 'bg-white text-cyan-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-950'
+              }`}
+              title="عرض البطاقات الذكية (أفضل للموبايل)"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>بطاقات</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-white text-cyan-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-950'
+              }`}
+              title="عرض الجدول المكتبي"
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              <span>جدول</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => openAddModal()}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-l from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-white font-bold rounded-2xl text-xs shadow-md shadow-cyan-600/30 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>تسجيل حالة جديدة</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Quick Filter Pills */}
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => openAddModal()}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-l from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-white font-bold rounded-xl text-xs shadow-md shadow-cyan-600/30 transition-all cursor-pointer"
+          onClick={() => setQuickFilter('all')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            quickFilter === 'all'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+          }`}
         >
-          <Plus className="w-4 h-4" />
-          <span>تسجيل حالة علاج جديدة</span>
+          جميع الحالات ({cases.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setQuickFilter('unpaid')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            quickFilter === 'unpaid'
+              ? 'bg-rose-600 text-white shadow-xs'
+              : 'bg-white text-rose-700 border border-rose-200 hover:bg-rose-50'
+          }`}
+        >
+          <span>متبقي عليها مبالغ</span>
+          <span className="bg-rose-100 text-rose-800 text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+            {unpaidCount}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setQuickFilter('paid')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            quickFilter === 'paid'
+              ? 'bg-emerald-600 text-white shadow-xs'
+              : 'bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50'
+          }`}
+        >
+          <span>خالصة بالكامل</span>
+          <span className="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+            {paidCount}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setQuickFilter('today')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            quickFilter === 'today'
+              ? 'bg-cyan-600 text-white shadow-xs'
+              : 'bg-white text-cyan-700 border border-cyan-200 hover:bg-cyan-50'
+          }`}
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          <span>حالات اليوم</span>
+          <span className="bg-cyan-100 text-cyan-800 text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+            {todayCount}
+          </span>
         </button>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-        <div className="relative">
+      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
+        <div className="relative lg:col-span-1">
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="بحث بالمريض، الطبيب، أو العلاج..."
-            className="w-full bg-slate-50 border border-slate-200 focus:border-cyan-500 rounded-xl py-2 px-3 pr-9 text-slate-800 outline-hidden"
+            placeholder="بحث بالمريض أو الطبيب..."
+            className="w-full bg-slate-50 border border-slate-200 focus:border-cyan-500 rounded-xl py-2 px-3 pr-9 text-slate-800 outline-hidden font-medium"
           />
           <Search className="w-4 h-4 text-slate-400 absolute top-2.5 right-3" />
+        </div>
+
+        {/* Branch Filter */}
+        <div className="relative">
+          <select
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 focus:border-cyan-500 rounded-xl py-2 px-3 text-slate-800 outline-hidden font-bold"
+          >
+            <option value="all">🏢 جميع الفروع</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <select
@@ -415,190 +559,396 @@ export const Cases: React.FC<CasesProps> = ({
         </select>
       </div>
 
-      {/* Cases Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-right text-xs">
-            <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
-              <tr>
-                <th className="p-3">التاريخ</th>
-                <th className="p-3">المريض</th>
-                <th className="p-3">الطبيب المعالج</th>
-                <th className="p-3">الإجراء السني / الأسنان</th>
-                <th className="p-3">الإجمالي والخصم</th>
-                <th className="p-3">خرج المعمل</th>
-                <th className="p-3">الصافي</th>
-                <th className="p-3 text-blue-700">نسبة الدكتور</th>
-                <th className="p-3 text-emerald-700">دخل العيادة</th>
-                <th className="p-3">المدفوع / المتبقي</th>
-                <th className="p-3 text-center">المستندات والطباعة</th>
-                <th className="p-3 text-center">إجراء</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredCases.length === 0 ? (
-                <tr>
-                  <td colSpan={12} className="p-8 text-center text-slate-400">
-                    لا توجد حالات مطابقة
-                  </td>
-                </tr>
-              ) : (
-                filteredCases.map((c) => {
-                  const editable = isCaseEditable(c);
+      {/* Main Content: Card View OR Table View */}
+      {viewMode === 'cards' ? (
+        /* Luxury Smart Cards Grid */
+        filteredCases.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-400">
+            <Stethoscope className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+            <p className="font-bold">لا توجد حالات مطابقة لمعايير البحث الحالية</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filteredCases.map((c) => {
+              const editable = isCaseEditable(c);
 
-                  return (
-                    <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3 font-mono text-slate-600 whitespace-nowrap">{c.date}</td>
-                      <td className="p-3">
-                        <span className="font-bold text-slate-900 block">{c.patientName}</span>
-                        <span className="text-[10px] text-slate-400 font-mono">#{c.id}</span>
-                      </td>
-                      <td className="p-3 text-slate-800">
-                        <span className="font-semibold block">{c.doctorName}</span>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          {c.isNoDoctorShare ? 'حالة 100% للعيادة' : `نسبة ${c.doctorPercentage}%`}
-                        </span>
-                      </td>
-                      <td className="p-3 max-w-[160px]">
-                        <span className="font-semibold text-slate-800 block truncate" title={c.treatment}>
-                          {c.treatment}
-                        </span>
-                        {c.teethNumbers?.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-0.5">
-                            {c.teethNumbers.map((t) => (
-                              <span
-                                key={t}
-                                className="bg-cyan-50 text-cyan-800 border border-cyan-200 px-1 rounded text-[9px] font-mono font-bold"
-                              >
-                                #{t}
-                              </span>
-                            ))}
+              return (
+                <div
+                  key={c.id}
+                  className="bg-white rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all p-4.5 flex flex-col justify-between gap-3.5 relative overflow-hidden group"
+                >
+                  {/* Top Header: Patient name, ID, Date, Branch badge */}
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-2.5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 to-cyan-400 text-slate-950 font-black flex items-center justify-center text-sm shrink-0 shadow-xs">
+                          {c.patientName ? c.patientName.charAt(0) : 'م'}
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-slate-900 text-sm leading-tight group-hover:text-cyan-600 transition-colors">
+                            {c.patientName}
+                          </h4>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono mt-0.5">
+                            <span>{c.date}</span>
+                            <span>•</span>
+                            <span>#{c.id.slice(-5)}</span>
                           </div>
-                        )}
-                      </td>
-                      <td className="p-3 font-mono">
-                        <span className="text-slate-800 font-bold block">
+                        </div>
+                      </div>
+
+                      {/* Branch Badge */}
+                      <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg font-bold border border-slate-200/60 shrink-0">
+                        {c.branchName || 'الفرع الرئيسي'}
+                      </span>
+                    </div>
+
+                    {/* Doctor & Treatment Box */}
+                    <div className="bg-slate-50/90 rounded-2xl p-3 border border-slate-100 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5 text-slate-800 font-bold">
+                          <Stethoscope className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                          <span>{c.doctorName}</span>
+                        </div>
+                        <span className="text-[10px] font-mono font-bold text-cyan-800 bg-cyan-50 px-2 py-0.5 rounded-md border border-cyan-100">
+                          {c.isNoDoctorShare ? '100% للعيادة' : `نسبة ${c.doctorPercentage}%`}
+                        </span>
+                      </div>
+
+                      <div className="text-xs font-bold text-slate-900 pt-0.5">
+                        {c.treatment}
+                      </div>
+
+                      {c.teethNumbers && c.teethNumbers.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {c.teethNumbers.map((t) => (
+                            <span
+                              key={t}
+                              className="bg-cyan-100 text-cyan-900 border border-cyan-300/60 px-1.5 py-0.2 rounded-md text-[10px] font-mono font-black"
+                            >
+                              #{t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Financial Summary Strip */}
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs bg-slate-50/50 p-2.5 rounded-2xl border border-slate-100/80 mt-2.5">
+                      <div>
+                        <div className="text-[9px] text-slate-400 font-medium">الإجمالي</div>
+                        <div className="font-extrabold font-mono text-slate-900">
                           {formatCurrency(c.grossAmount, c.currency)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] text-slate-400 font-medium">دخل العيادة</div>
+                        <div className="font-extrabold font-mono text-emerald-600">
+                          {formatCurrency(c.clinicShare, c.currency)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] text-slate-400 font-medium">نسبة الطبيب</div>
+                        <div className="font-extrabold font-mono text-blue-600">
+                          {formatCurrency(c.doctorShare, c.currency)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Bottom: Status, Print actions, Edit/Delete */}
+                  <div className="pt-2 border-t border-slate-100 space-y-2.5">
+                    {/* Payment Status Bar */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-slate-500 font-medium">حالة السداد:</span>
+                      {c.remainingAmount <= 0 ? (
+                        <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200/80 px-2 py-0.5 rounded-lg font-bold text-[11px]">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>خالص بالكامل</span>
                         </span>
-                        {c.discountAmount > 0 && (
-                          <span className="text-rose-600 text-[10px] block">
-                            خصم: -{formatCurrency(c.discountAmount, c.currency)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 font-mono text-amber-700">
-                        {c.labExpenseAmount > 0
-                          ? formatCurrency(c.labExpenseAmount, c.currency)
-                          : '—'}
-                      </td>
-                      <td className="p-3 font-mono font-bold text-slate-900">
-                        {formatCurrency(c.netAmount, c.currency)}
-                      </td>
-                      <td className="p-3 font-mono font-bold text-blue-700">
-                        {formatCurrency(c.doctorShare, c.currency)}
-                      </td>
-                      <td className="p-3 font-mono font-bold text-emerald-700">
-                        {formatCurrency(c.clinicShare, c.currency)}
-                      </td>
-                      <td className="p-3 font-mono">
-                        <span className="text-emerald-700 font-bold block">
-                          {formatCurrency(c.paidAmount, c.currency)}
-                        </span>
-                        {c.remainingAmount > 0 ? (
-                          <span className="text-rose-600 text-[10px] font-bold block">
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200/80 px-2 py-0.5 rounded-lg font-bold text-[11px] font-mono">
                             متبقي: {formatCurrency(c.remainingAmount, c.currency)}
                           </span>
-                        ) : (
-                          <span className="text-slate-400 text-[10px] block">خالص</span>
-                        )}
-                      </td>
-
-                      {/* Print options: Exam sheet, Invoice, Case Summary */}
-                      <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
                           <button
                             type="button"
-                            onClick={() => onSelectPrintInvoice(c)}
-                            className="p-1 px-2 bg-slate-100 hover:bg-cyan-50 text-cyan-700 rounded-md font-bold text-[10px] transition-all"
-                            title="طباعة فاتورة / سند قبض"
+                            onClick={() => {
+                              setPaymentModalCase(c);
+                              setPaymentAmount(c.remainingAmount);
+                            }}
+                            className="p-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                            title="تسجيل سداد دفعة"
                           >
-                            فاتورة
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onSelectPrintExamSheet(c)}
-                            className="p-1 px-2 bg-slate-100 hover:bg-cyan-50 text-slate-700 rounded-md font-bold text-[10px] transition-all"
-                            title="طباعة ورقة معاينة الطبيب"
-                          >
-                            معاينة
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onSelectPrintCaseSummary(c)}
-                            className="p-1 px-2 bg-slate-100 hover:bg-cyan-50 text-slate-700 rounded-md font-bold text-[10px] transition-all"
-                            title="طباعة كشف تفصيلي للحالة"
-                          >
-                            كشف
+                            <CreditCard className="w-3 h-3" />
+                            <span>سداد</span>
                           </button>
                         </div>
-                      </td>
+                      )}
+                    </div>
 
-                      {/* Edit, Pay, or 24-hour Lock */}
-                      <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {/* Settle partial payment */}
-                          {c.remainingAmount > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPaymentModalCase(c);
-                                setPaymentAmount(c.remainingAmount);
-                              }}
-                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                              title="تسجيل دفعة جديدة للمتبقي"
-                            >
-                              <CreditCard className="w-4 h-4" />
-                            </button>
-                          )}
+                    {/* Print Action Buttons (>= 48px touch-friendly) */}
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onSelectPrintInvoice(c)}
+                        className="py-2 px-2 bg-cyan-50 hover:bg-cyan-100 text-cyan-800 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
+                        title="طباعة فاتورة / سند قبض"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-cyan-600" />
+                        <span>فاتورة</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSelectPrintExamSheet(c)}
+                        className="py-2 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
+                        title="طباعة ورقة معاينة الطبيب"
+                      >
+                        <span>معاينة</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSelectPrintCaseSummary(c)}
+                        className="py-2 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
+                        title="طباعة كشف تفصيلي للحالة"
+                      >
+                        <span>كشف</span>
+                      </button>
+                    </div>
 
-                          {editable ? (
+                    {/* Footer: Author & Edit/Delete */}
+                    <div className="flex items-center justify-between text-xs pt-1">
+                      <span className="text-[10px] text-slate-400">
+                        سجلها: {c.createdBy || 'الاستقبال'}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {editable ? (
+                          <>
                             <button
                               type="button"
                               onClick={() => openEditModal(c)}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                               title="تعديل الحالة"
                             >
                               <Edit className="w-4 h-4" />
                             </button>
-                          ) : (
-                            <span
-                              className="p-1.5 text-slate-400 cursor-not-allowed"
-                              title="مغلقة للقراءة فقط (تجاوزت 24 ساعة — يحق للمدير فقط التعديل)"
-                            >
-                              <Lock className="w-4 h-4 text-amber-500" />
-                            </span>
-                          )}
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm('هل أنت متأكد من حذف هذه الحالة السنية؟')) {
+                                    onDeleteCase(c.id);
+                                  }
+                                }}
+                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                title="حذف الحالة"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <span
+                            className="flex items-center gap-1 text-[10px] text-slate-400"
+                            title="مغلقة للقراءة فقط (تجاوزت 24 ساعة)"
+                          >
+                            <Lock className="w-3.5 h-3.5 text-amber-500" />
+                            <span>مغلقة</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      ) : (
+        /* Desktop Table View */
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-right text-xs">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
+                <tr>
+                  <th className="p-3">التاريخ</th>
+                  <th className="p-3">المريض</th>
+                  <th className="p-3">الفرع</th>
+                  <th className="p-3">الطبيب المعالج</th>
+                  <th className="p-3">الإجراء السني / الأسنان</th>
+                  <th className="p-3">الإجمالي والخصم</th>
+                  <th className="p-3">خرج المعمل</th>
+                  <th className="p-3">الصافي</th>
+                  <th className="p-3 text-blue-700">نسبة الدكتور</th>
+                  <th className="p-3 text-emerald-700">دخل العيادة</th>
+                  <th className="p-3">المدفوع / المتبقي</th>
+                  <th className="p-3 text-center">المستندات والطباعة</th>
+                  <th className="p-3 text-center">إجراء</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredCases.length === 0 ? (
+                  <tr>
+                    <td colSpan={13} className="p-8 text-center text-slate-400">
+                      لا توجد حالات مطابقة
+                    </td>
+                  </tr>
+                ) : (
+                  filteredCases.map((c) => {
+                    const editable = isCaseEditable(c);
 
-                          {isAdmin && (
+                    return (
+                      <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-3 font-mono text-slate-600 whitespace-nowrap">{c.date}</td>
+                        <td className="p-3 font-bold text-slate-900 whitespace-nowrap">
+                          {c.patientName}
+                        </td>
+                        <td className="p-3 whitespace-nowrap text-[11px] text-slate-500 font-medium">
+                          {c.branchName || 'الرئيسي'}
+                        </td>
+                        <td className="p-3 whitespace-nowrap font-medium text-slate-700">
+                          {c.doctorName}
+                          <span className="block text-[10px] text-slate-400">
+                            {c.isNoDoctorShare ? 'بدون نسبة' : `${c.doctorPercentage}%`}
+                          </span>
+                        </td>
+                        <td className="p-3 max-w-[200px]">
+                          <div className="font-semibold text-slate-800 line-clamp-1">{c.treatment}</div>
+                          {c.teethNumbers && c.teethNumbers.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {c.teethNumbers.map((t) => (
+                                <span
+                                  key={t}
+                                  className="bg-cyan-50 text-cyan-800 border border-cyan-200 px-1 py-0.2 rounded text-[10px] font-mono"
+                                >
+                                  #{t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 whitespace-nowrap font-mono">
+                          <div className="font-bold text-slate-900">
+                            {formatCurrency(c.grossAmount, c.currency)}
+                          </div>
+                          {c.discountAmount > 0 && (
+                            <div className="text-[10px] text-rose-500">
+                              خصم: -{formatCurrency(c.discountAmount, c.currency)}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 whitespace-nowrap font-mono text-amber-700 font-semibold">
+                          {c.labExpenseAmount > 0
+                            ? formatCurrency(c.labExpenseAmount, c.currency)
+                            : '—'}
+                        </td>
+                        <td className="p-3 whitespace-nowrap font-mono font-bold text-slate-900 bg-slate-50/50">
+                          {formatCurrency(c.netAmount, c.currency)}
+                        </td>
+                        <td className="p-3 whitespace-nowrap font-mono font-bold text-blue-700">
+                          {formatCurrency(c.doctorShare, c.currency)}
+                        </td>
+                        <td className="p-3 whitespace-nowrap font-mono font-bold text-emerald-700 bg-emerald-50/30">
+                          {formatCurrency(c.clinicShare, c.currency)}
+                        </td>
+                        <td className="p-3 whitespace-nowrap font-mono">
+                          <div className="text-emerald-700 font-bold">
+                            مدفوع: {formatCurrency(c.paidAmount, c.currency)}
+                          </div>
+                          {c.remainingAmount > 0 ? (
+                            <div className="text-rose-600 font-bold text-[11px]">
+                              متبقي: {formatCurrency(c.remainingAmount, c.currency)}
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-emerald-600 font-bold">خالص ✓</div>
+                          )}
+                        </td>
+                        <td className="p-3 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1">
                             <button
                               type="button"
-                              onClick={() => onDeleteCase(c.id)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                              title="حذف الحالة (للمدير فقط)"
+                              onClick={() => onSelectPrintInvoice(c)}
+                              className="p-1 px-2 bg-slate-100 hover:bg-cyan-50 text-cyan-700 rounded-md font-bold text-[10px] transition-all cursor-pointer"
+                              title="طباعة فاتورة / سند قبض"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              فاتورة
                             </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                            <button
+                              type="button"
+                              onClick={() => onSelectPrintExamSheet(c)}
+                              className="p-1 px-2 bg-slate-100 hover:bg-cyan-50 text-slate-700 rounded-md font-bold text-[10px] transition-all cursor-pointer"
+                              title="طباعة ورقة معاينة الطبيب"
+                            >
+                              معاينة
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onSelectPrintCaseSummary(c)}
+                              className="p-1 px-2 bg-slate-100 hover:bg-cyan-50 text-slate-700 rounded-md font-bold text-[10px] transition-all cursor-pointer"
+                              title="طباعة كشف تفصيلي للحالة"
+                            >
+                              كشف
+                            </button>
+                          </div>
+                        </td>
+                        <td className="p-3 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1">
+                            {c.remainingAmount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPaymentModalCase(c);
+                                  setPaymentAmount(c.remainingAmount);
+                                }}
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all cursor-pointer"
+                                title="تسجيل دفعة جديدة للمتبقي"
+                              >
+                                <CreditCard className="w-4 h-4" />
+                              </button>
+                            )}
+
+                            {editable ? (
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(c)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all cursor-pointer"
+                                title="تعديل الحالة"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <span
+                                className="p-1.5 text-slate-400 cursor-not-allowed"
+                                title="مغلقة للقراءة فقط (تجاوزت 24 ساعة — يحق للمدير فقط التعديل)"
+                              >
+                                <Lock className="w-4 h-4 text-amber-500" />
+                              </span>
+                            )}
+
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm('هل أنت متأكد من حذف هذه الحالة؟')) {
+                                    onDeleteCase(c.id);
+                                  }
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                                title="حذف الحالة (للمدير فقط)"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Add / Edit Case Modal */}
       {isModalOpen && (
@@ -623,8 +973,8 @@ export const Cases: React.FC<CasesProps> = ({
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Patient & Doctor Selector */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Patient, Doctor, Branch & Date Selector */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">المريض *</label>
                   <select
@@ -655,6 +1005,26 @@ export const Cases: React.FC<CasesProps> = ({
                         {d.name} ({d.percentage}%)
                       </option>
                     ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">الفرع التابع له *</label>
+                  <select
+                    required
+                    value={caseBranchId}
+                    onChange={(e) => setCaseBranchId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-cyan-500 rounded-xl py-2 px-3 text-slate-900 outline-hidden font-bold"
+                  >
+                    {branches.length > 0 ? (
+                      branches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="main-sanaa">فرع صنعاء - المركز الرئيسي</option>
+                    )}
                   </select>
                 </div>
 

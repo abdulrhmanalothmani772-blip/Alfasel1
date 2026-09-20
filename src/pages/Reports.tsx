@@ -9,6 +9,7 @@ import {
   NurseTransaction,
   ClinicSettings,
   User,
+  Branch,
 } from '../types';
 import { formatCurrency, convertToYER } from '../lib/calc';
 import {
@@ -24,6 +25,7 @@ import {
   AlertCircle,
   Download,
   Filter,
+  Building2,
 } from 'lucide-react';
 
 interface ReportsProps {
@@ -36,6 +38,8 @@ interface ReportsProps {
   nurseTransactions: NurseTransaction[];
   settings: ClinicSettings;
   currentUser: User;
+  branches?: Branch[];
+  activeBranchId?: string;
   onPrintReport: (title: string, data: any) => void;
 }
 
@@ -57,20 +61,46 @@ export const Reports: React.FC<ReportsProps> = ({
   nurseTransactions,
   settings,
   currentUser,
+  branches = [],
+  activeBranchId = 'all',
   onPrintReport,
 }) => {
   const [activeTab, setActiveTab] = useState<ReportTab>('overview');
+  const [selectedBranch, setSelectedBranch] = useState<string>(activeBranchId || 'all');
   const [startDate, setStartDate] = useState(
     new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Date filtering logic
+  // Date & Branch filtering logic
   const isInRange = (d: string) => d >= startDate && d <= endDate;
 
-  const filteredCases = cases.filter((c) => isInRange(c.date));
-  const filteredLabs = labExpenses.filter((l) => isInRange(l.date));
-  const filteredClinicExpenses = clinicExpenses.filter((e) => isInRange(e.date));
+  const filteredCases = cases.filter((c) => {
+    if (!isInRange(c.date)) return false;
+    if (selectedBranch === 'all') return true;
+    return (
+      c.branchId === selectedBranch ||
+      (!c.branchId && branches.find((b) => b.id === selectedBranch)?.isMain)
+    );
+  });
+
+  const filteredLabs = labExpenses.filter((l) => {
+    if (!isInRange(l.date)) return false;
+    if (selectedBranch === 'all') return true;
+    return (
+      l.branchId === selectedBranch ||
+      (!l.branchId && branches.find((b) => b.id === selectedBranch)?.isMain)
+    );
+  });
+
+  const filteredClinicExpenses = clinicExpenses.filter((e) => {
+    if (!isInRange(e.date)) return false;
+    if (selectedBranch === 'all') return true;
+    return (
+      e.branchId === selectedBranch ||
+      (!e.branchId && branches.find((b) => b.id === selectedBranch)?.isMain)
+    );
+  });
 
   // Totals
   const totalRevenue = filteredCases.reduce(
@@ -158,6 +188,23 @@ export const Reports: React.FC<ReportsProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Branch Filter */}
+          <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 text-xs">
+            <Building2 className="w-4 h-4 text-cyan-600" />
+            <select
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              className="bg-transparent font-bold text-slate-800 outline-hidden cursor-pointer"
+            >
+              <option value="all">كافة الفروع (المركز الموحد)</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name} {b.isMain ? '(الرئيسي)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Date Range Picker */}
           <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 text-xs">
             <span className="text-slate-400">من:</span>
