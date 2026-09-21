@@ -1,6 +1,6 @@
 export type Currency = 'YER' | 'SAR' | 'USD';
 
-export type UserRole = 'admin' | 'reception';
+export type UserRole = 'admin' | 'doctor' | 'reception';
 
 export interface Branch {
   id: string;

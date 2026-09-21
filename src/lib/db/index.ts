@@ -134,6 +134,14 @@ export async function initializeDatabase(): Promise<void> {
         details: 'تم تثبيت البيانات التجريبية الأولية بنجاح',
       });
     });
+  } else {
+    // Ensure all existing doctors have the approved standard 40% commission
+    const existingDocs = await db.doctors.toArray();
+    for (const doc of existingDocs) {
+      if (doc.percentage !== 40) {
+        await db.doctors.update(doc.id, { percentage: 40 });
+      }
+    }
   }
 }
 

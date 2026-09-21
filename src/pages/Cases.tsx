@@ -1429,9 +1429,10 @@ export const Cases: React.FC<CasesProps> = ({
           }}
           patients={patients}
           cases={cases}
-          preselectedPatientId={cameraTarget.patient?.id}
-          preselectedCaseId={cameraTarget.caseId}
-          currentUser={currentUser}
+          patient={cameraTarget.patient || null}
+          selectedCaseId={cameraTarget.caseId}
+          currentUser={currentUser.fullName || currentUser.username}
+          branchId={activeBranchId}
           onSavePhoto={async (photo) => {
             await onSavePhoto(photo);
             setIsCameraOpen(false);

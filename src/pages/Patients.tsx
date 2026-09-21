@@ -439,7 +439,7 @@ export const Patients: React.FC<PatientsProps> = ({
                   type="submit"
                   className="px-5 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-bold shadow-md shadow-cyan-600/30 transition-all cursor-pointer"
                 >
-                  {editingPatient ? 'حفظ التعديلات' : 'تسجيل المريض'}
+                  {editingPatient ? 'حفظ التعديلات' : 'تسجيل مريض جديد'}
                 </button>
               </div>
             </form>

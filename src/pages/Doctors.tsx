@@ -276,8 +276,7 @@ export const Doctors: React.FC<DoctorsProps> = ({
             const paidYER = convertToYER(
               c.paidAmount,
               c.currency,
-              settings.sarToYer,
-              settings.usdToYer
+              { sarToYer: settings.sarToYer, usdToYer: settings.usdToYer }
             );
             totalEarned += Math.round((paidYER * doc.percentage) / 100);
           });
@@ -295,8 +294,7 @@ export const Doctors: React.FC<DoctorsProps> = ({
             totalSettled += convertToYER(
               s.amount,
               s.currency,
-              settings.sarToYer,
-              settings.usdToYer
+              { sarToYer: settings.sarToYer, usdToYer: settings.usdToYer }
             );
           });
 

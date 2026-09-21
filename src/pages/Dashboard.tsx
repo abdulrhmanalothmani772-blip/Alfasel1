@@ -12,6 +12,7 @@ import {
 import { formatCurrency, convertToYER } from '../lib/calc';
 import {
   Users,
+  UserPlus,
   Stethoscope,
   TrendingUp,
   FlaskConical,
@@ -235,8 +236,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
             onClick={() => onNavigate('patients')}
             className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold rounded-2xl text-xs transition-all cursor-pointer"
           >
-            <Users className="w-4 h-4 text-cyan-400" />
-            <span>إضافة مريض</span>
+            <UserPlus className="w-4 h-4 text-cyan-400" />
+            <span>تسجيل مريض جديد</span>
           </button>
           <button
             type="button"

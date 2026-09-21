@@ -208,9 +208,12 @@ export const App: React.FC = () => {
   }, [loadData]);
 
   // Auth Handlers
-  const handleLogin = (user: User) => {
+  const handleLogin = (user: User, branchId?: string) => {
     setCurrentUser(user);
+    const targetBranch = branchId || user.branchId || 'all';
+    setActiveBranchId(targetBranch);
     localStorage.setItem('alfaisal_user', JSON.stringify(user));
+    localStorage.setItem('alfaisal_active_branch', targetBranch);
     showToast(`مرحباً بك، ${user.fullName}`);
   };
 
@@ -446,7 +449,18 @@ export const App: React.FC = () => {
   };
 
   if (!currentUser) {
-    return <Login onLogin={handleLogin} />;
+    return (
+      <Login
+        onLogin={handleLogin}
+        branches={branches}
+        activeBranchId={activeBranchId}
+        onSelectBranch={(bId) => {
+          setActiveBranchId(bId);
+          localStorage.setItem('alfaisal_active_branch', bId);
+        }}
+        onAddBranch={handleAddBranch}
+      />
+    );
   }
 
   if (isLoadingData || !settings) {
@@ -459,7 +473,7 @@ export const App: React.FC = () => {
     );
   }
 
-  const unpaidCasesCount = cases.filter((c) => c.status === 'in-progress' || c.remainingAmount > 0).length;
+  const unpaidCasesCount = cases.filter((c) => c.status === 'in_progress' || c.remainingAmount > 0).length;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col" dir="rtl">
@@ -493,7 +507,7 @@ export const App: React.FC = () => {
         />
 
         {/* Dynamic Page Content */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-7 w-full max-w-[1750px] mx-auto">
           {activePage === 'dashboard' && (
             <Dashboard
               cases={cases}
@@ -615,12 +629,12 @@ export const App: React.FC = () => {
               settings={settings}
               currentUser={currentUser}
               onRecordSettlement={handleRecordDoctorSettlement}
-              onPrintAccount={(doc, selectedDate) =>
+              onPrintSettlement={(doc, selectedDate) =>
                 setActivePrint({
                   type: 'doctorSettlement',
-                  title: `حساب الطبيب اليومي - د. ${doc.name}`,
+                  title: `حساب الطبيب اليومي - د. ${doc?.name || ''}`,
                   data: {
-                    doctors: [doc],
+                    doctors: doc ? [doc] : doctors,
                     cases,
                     settlements: doctorSettlements,
                     settings,
@@ -639,7 +653,7 @@ export const App: React.FC = () => {
               currentUser={currentUser}
               onAddLabExpense={handleAddLabExpense}
               onDeleteLabExpense={handleDeleteLabExpense}
-              onPrintLabStatement={() =>
+              onPrintLabReport={() =>
                 setActivePrint({
                   type: 'genericReport',
                   title: 'كشف مصاريف وخروج معامل الأسنان',
@@ -773,7 +787,6 @@ export const App: React.FC = () => {
               discounts={discounts}
               users={users}
               currentUser={currentUser}
-              branches={branches}
               onUpdateSettings={handleUpdateSettings}
               onAddDiscount={handleAddDiscount}
               onDeleteDiscount={handleDeleteDiscount}
