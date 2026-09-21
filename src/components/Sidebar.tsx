@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Settings,
   Building2,
+  Camera,
   X,
 } from 'lucide-react';
 import { UserRole } from '../types';
@@ -21,6 +22,7 @@ export type NavTab =
   | 'dashboard'
   | 'patients'
   | 'cases'
+  | 'clinical-photos'
   | 'branches'
   | 'lab-expenses'
   | 'doctors'
@@ -74,6 +76,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'bg-rose-500',
       roles: ['admin', 'reception'],
       highlight: true,
+    },
+    {
+      id: 'clinical-photos' as NavTab,
+      label: 'التوثيق الصوري والكاميرا',
+      icon: Camera,
+      roles: ['admin', 'reception'],
     },
     {
       id: 'branches' as NavTab,

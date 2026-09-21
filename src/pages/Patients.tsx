@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Patient, DentalCase, User } from '../types';
+import { Patient, DentalCase, User, ClinicalPhoto } from '../types';
 import {
   Users,
   Search,
@@ -13,34 +13,50 @@ import {
   UserPlus,
   Stethoscope,
   Calendar,
+  Camera,
+  Image as ImageIcon,
+  Sparkles,
+  Eye,
 } from 'lucide-react';
 import { formatCurrency } from '../lib/calc';
+import { DentalCameraModal } from '../components/DentalCameraModal';
+import { ClinicalPhotoViewerModal } from '../components/ClinicalPhotoViewerModal';
 
 interface PatientsProps {
   patients: Patient[];
   cases: DentalCase[];
   currentUser: User;
+  clinicalPhotos?: ClinicalPhoto[];
   onAddPatient: (patient: Patient) => Promise<void>;
   onUpdatePatient: (patient: Patient) => Promise<void>;
   onArchivePatient: (id: string) => Promise<void>;
   onOpenNewCaseForPatient: (patient: Patient) => void;
   onSelectCaseToPrint: (dentalCase: DentalCase) => void;
+  onSavePhoto?: (photo: ClinicalPhoto) => Promise<void>;
+  onDeletePhoto?: (id: string) => Promise<void>;
 }
 
 export const Patients: React.FC<PatientsProps> = ({
   patients,
   cases,
   currentUser,
+  clinicalPhotos = [],
   onAddPatient,
   onUpdatePatient,
   onArchivePatient,
   onOpenNewCaseForPatient,
   onSelectCaseToPrint,
+  onSavePhoto,
+  onDeletePhoto,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedPatientForView, setSelectedPatientForView] = useState<Patient | null>(null);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [patientModalTab, setPatientModalTab] = useState<'cases' | 'photos'>('cases');
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [selectedPatientForCamera, setSelectedPatientForCamera] = useState<Patient | null>(null);
+  const [viewingPhoto, setViewingPhoto] = useState<ClinicalPhoto | null>(null);
 
   // Form states
   const [name, setName] = useState('');
@@ -251,6 +267,19 @@ export const Patients: React.FC<PatientsProps> = ({
                             title="عرض الملف والسجل الطبي"
                           >
                             <FileText className="w-4 h-4" />
+                          </button>
+
+                          {/* Clinical Camera Photo */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPatientForCamera(p);
+                              setIsCameraModalOpen(true);
+                            }}
+                            className="p-1.5 text-teal-600 hover:bg-teal-50 rounded-lg transition-all"
+                            title="التقاط وتوثيق صورة سريرية بالكاميرا"
+                          >
+                            <Camera className="w-4 h-4" />
                           </button>
 
                           {/* WhatsApp */}
@@ -469,96 +498,232 @@ export const Patients: React.FC<PatientsProps> = ({
               </div>
             </div>
 
-            {/* Cases History */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-bold text-slate-800 text-sm">
-                  سجل الحالات والعلاجات السابقة
-                </h4>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const pat = selectedPatientForView;
-                    setSelectedPatientForView(null);
-                    onOpenNewCaseForPatient(pat);
-                  }}
-                  className="flex items-center gap-1 px-3 py-1 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg font-bold text-[11px] transition-all cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>فتح حالة جديدة</span>
-                </button>
-              </div>
+            {/* Tabs Header */}
+            <div className="flex border-b border-slate-200 mb-4">
+              <button
+                type="button"
+                onClick={() => setPatientModalTab('cases')}
+                className={`py-2.5 px-4 font-bold text-xs border-b-2 transition-all flex items-center gap-1.5 ${
+                  patientModalTab === 'cases'
+                    ? 'border-cyan-600 text-cyan-700 bg-cyan-50/50'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Stethoscope className="w-4 h-4" />
+                <span>سجل الحالات والعلاجات ({cases.filter((c) => c.patientId === selectedPatientForView.id).length})</span>
+              </button>
 
-              <div className="space-y-3">
-                {cases
-                  .filter((c) => c.patientId === selectedPatientForView.id)
-                  .map((c) => (
-                    <div
-                      key={c.id}
-                      className="border border-slate-200 rounded-xl p-3.5 hover:border-cyan-400 transition-all bg-white"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <span className="font-bold text-slate-900 text-sm block">
-                            {c.treatment}
+              <button
+                type="button"
+                onClick={() => setPatientModalTab('photos')}
+                className={`py-2.5 px-4 font-bold text-xs border-b-2 transition-all flex items-center gap-1.5 ${
+                  patientModalTab === 'photos'
+                    ? 'border-cyan-600 text-cyan-700 bg-cyan-50/50'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Camera className="w-4 h-4" />
+                <span>التوثيق الصوري والكاميرا ({clinicalPhotos.filter((p) => p.patientId === selectedPatientForView.id).length})</span>
+              </button>
+            </div>
+
+            {patientModalTab === 'cases' ? (
+              /* Cases History */
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-bold text-slate-800 text-sm">
+                    سجل الحالات والعلاجات السابقة
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const pat = selectedPatientForView;
+                      setSelectedPatientForView(null);
+                      onOpenNewCaseForPatient(pat);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg font-bold text-[11px] transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>فتح حالة جديدة</span>
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {cases
+                    .filter((c) => c.patientId === selectedPatientForView.id)
+                    .map((c) => (
+                      <div
+                        key={c.id}
+                        className="border border-slate-200 rounded-xl p-3.5 hover:border-cyan-400 transition-all bg-white"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <span className="font-bold text-slate-900 text-sm block">
+                              {c.treatment}
+                            </span>
+                            <span className="text-slate-500 text-[11px]">
+                              بإشراف: {c.doctorName} • التاريخ: {c.date}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => onSelectCaseToPrint(c)}
+                            className="px-2 py-1 bg-slate-100 hover:bg-cyan-50 text-cyan-800 rounded-lg font-bold text-[10px] transition-all"
+                          >
+                            طباعة المستندات
+                          </button>
+                        </div>
+
+                        {c.teethNumbers?.length > 0 && (
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <span className="text-slate-500 font-semibold">الأسنان:</span>
+                            <div className="flex flex-wrap gap-1">
+                              {c.teethNumbers.map((t) => (
+                                <span
+                                  key={t}
+                                  className="bg-cyan-50 text-cyan-800 border border-cyan-200 px-1.5 py-0.2 rounded font-mono font-bold"
+                                >
+                                  #{t}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-100 text-slate-600 font-mono">
+                          <span>
+                            المبلغ: {formatCurrency(c.amountAfterDiscount, c.currency)}
                           </span>
-                          <span className="text-slate-500 text-[11px]">
-                            بإشراف: {c.doctorName} • التاريخ: {c.date}
+                          <span className="text-emerald-700 font-bold">
+                            المدفوع: {formatCurrency(c.paidAmount, c.currency)}
+                          </span>
+                          <span
+                            className={`font-bold ${
+                              c.remainingAmount > 0 ? 'text-rose-600' : 'text-slate-400'
+                            }`}
+                          >
+                            المتبقي: {formatCurrency(c.remainingAmount, c.currency)}
                           </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => onSelectCaseToPrint(c)}
-                          className="px-2 py-1 bg-slate-100 hover:bg-cyan-50 text-cyan-800 rounded-lg font-bold text-[10px] transition-all"
-                        >
-                          طباعة المستندات
-                        </button>
                       </div>
+                    ))}
 
-                      {c.teethNumbers?.length > 0 && (
-                        <div className="flex items-center gap-1.5 mb-2">
-                          <span className="text-slate-500 font-semibold">الأسنان:</span>
-                          <div className="flex flex-wrap gap-1">
-                            {c.teethNumbers.map((t) => (
-                              <span
-                                key={t}
-                                className="bg-cyan-50 text-cyan-800 border border-cyan-200 px-1.5 py-0.2 rounded font-mono font-bold"
-                              >
-                                #{t}
-                              </span>
-                            ))}
+                  {cases.filter((c) => c.patientId === selectedPatientForView.id).length === 0 && (
+                    <p className="text-center text-slate-400 py-6 italic">
+                      لا توجد حالات مسجلة لهذا المريض حتى الآن
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* Clinical Photos History */
+              <div className="mb-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-sm">
+                      معرض الصور والتوثيق السريري للمريض
+                    </h4>
+                    <p className="text-slate-500 text-[11px]">
+                      صور قبل وبعد العلاج والأشعة التشخيصية
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPatientForCamera(selectedPatientForView);
+                      setIsCameraModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-bold text-xs transition-all shadow-sm cursor-pointer"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>التقاط صورة بالكاميرا</span>
+                  </button>
+                </div>
+
+                {clinicalPhotos.filter((p) => p.patientId === selectedPatientForView.id).length === 0 ? (
+                  <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200 space-y-2">
+                    <Camera className="w-8 h-8 text-slate-300 mx-auto" />
+                    <p className="text-slate-500 text-xs font-bold">لا توجد صور موثقة لهذا المريض حتى الآن</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPatientForCamera(selectedPatientForView);
+                        setIsCameraModalOpen(true);
+                      }}
+                      className="text-xs text-cyan-600 font-bold hover:underline"
+                    >
+                      التقط أول صورة سريرية الآن
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {clinicalPhotos
+                      .filter((p) => p.patientId === selectedPatientForView.id)
+                      .map((photo) => (
+                        <div
+                          key={photo.id}
+                          onClick={() => setViewingPhoto(photo)}
+                          className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md hover:border-cyan-400 cursor-pointer transition-all flex flex-col group"
+                        >
+                          <div className="relative aspect-4/3 bg-slate-900 overflow-hidden">
+                            <img
+                              src={photo.photoUrl}
+                              alt={photo.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                            <span className="absolute top-1.5 right-1.5 bg-slate-950/80 text-white text-[9px] px-2 py-0.5 rounded-full font-bold">
+                              {photo.stage === 'before'
+                                ? 'قبل العلاج'
+                                : photo.stage === 'during'
+                                ? 'أثناء العلاج'
+                                : photo.stage === 'after'
+                                ? 'بعد العلاج'
+                                : photo.stage === 'xray'
+                                ? 'أشعة'
+                                : 'توثيق'}
+                            </span>
+                          </div>
+                          <div className="p-2 text-xs">
+                            <p className="font-bold text-slate-800 truncate">{photo.title}</p>
+                            <span className="text-[10px] text-slate-400 block mt-0.5">{photo.date}</span>
                           </div>
                         </div>
-                      )}
-
-                      <div className="flex justify-between items-center pt-2 border-t border-slate-100 text-slate-600 font-mono">
-                        <span>
-                          المبلغ: {formatCurrency(c.amountAfterDiscount, c.currency)}
-                        </span>
-                        <span className="text-emerald-700 font-bold">
-                          المدفوع: {formatCurrency(c.paidAmount, c.currency)}
-                        </span>
-                        <span
-                          className={`font-bold ${
-                            c.remainingAmount > 0 ? 'text-rose-600' : 'text-slate-400'
-                          }`}
-                        >
-                          المتبقي: {formatCurrency(c.remainingAmount, c.currency)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-
-                {cases.filter((c) => c.patientId === selectedPatientForView.id).length === 0 && (
-                  <p className="text-center text-slate-400 py-6 italic">
-                    لا توجد حالات مسجلة لهذا المريض حتى الآن
-                  </p>
+                      ))}
+                  </div>
                 )}
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
+
+      {/* Camera Capture Modal */}
+      <DentalCameraModal
+        isOpen={isCameraModalOpen}
+        onClose={() => {
+          setIsCameraModalOpen(false);
+          setSelectedPatientForCamera(null);
+        }}
+        patient={selectedPatientForCamera}
+        patients={patients}
+        cases={cases}
+        currentUser={currentUser.fullName || currentUser.username}
+        onSavePhoto={onSavePhoto || (async () => {})}
+      />
+
+      {/* Photo Viewer Modal */}
+      <ClinicalPhotoViewerModal
+        photo={viewingPhoto}
+        allPhotos={clinicalPhotos}
+        patient={
+          viewingPhoto
+            ? patients.find((p) => p.id === viewingPhoto.patientId) || null
+            : null
+        }
+        onClose={() => setViewingPhoto(null)}
+        onDeletePhoto={onDeletePhoto}
+      />
     </div>
   );
 };
+

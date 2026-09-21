@@ -16,6 +16,7 @@ import {
   CasePayment,
   User,
   Branch,
+  ClinicalPhoto,
 } from '../../types';
 import {
   INITIAL_PATIENTS,
@@ -55,6 +56,7 @@ class AlFaisalDatabase extends Dexie {
   settings!: Table<{ key: string; value: any }, string>;
   users!: Table<User, string>;
   branches!: Table<Branch, string>;
+  clinicalPhotos!: Table<ClinicalPhoto, string>;
 
   constructor() {
     super('AlFaisalDentalCenterDB');
@@ -74,6 +76,10 @@ class AlFaisalDatabase extends Dexie {
       settings: 'key',
       users: 'id, username, role, branchId',
       branches: 'id, name, code, manager, status',
+    });
+
+    this.version(3).stores({
+      clinicalPhotos: 'id, patientId, caseId, stage, date, branchId',
     });
   }
 }
@@ -807,4 +813,50 @@ export const deleteBranchById = async (id: string, user = 'admin'): Promise<void
     });
   }
 };
+
+export const deleteBranch = deleteBranchById;
+
+// -------------------------------------------------------------
+// التوثيق الصوري السريري والكاميرا (Clinical Photography)
+// -------------------------------------------------------------
+export const getAllClinicalPhotos = async (): Promise<ClinicalPhoto[]> => {
+  return await db.clinicalPhotos.reverse().sortBy('createdAt');
+};
+
+export const getClinicalPhotosByPatientId = async (patientId: string): Promise<ClinicalPhoto[]> => {
+  return await db.clinicalPhotos.where('patientId').equals(patientId).reverse().sortBy('createdAt');
+};
+
+export const getClinicalPhotosByCaseId = async (caseId: string): Promise<ClinicalPhoto[]> => {
+  return await db.clinicalPhotos.where('caseId').equals(caseId).reverse().sortBy('createdAt');
+};
+
+export const saveClinicalPhoto = async (photo: ClinicalPhoto, user = 'admin'): Promise<void> => {
+  await db.clinicalPhotos.put(photo);
+  await db.auditLogs.add({
+    id: `audit-${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    user,
+    action: 'حفظ صورة سريرية',
+    target: photo.title || photo.stage,
+    details: `تم حفظ صورة توثيقية للحالة السنية (${photo.title || photo.stage}) للمريض #${photo.patientId}`,
+  });
+};
+
+export const deleteClinicalPhotoById = async (id: string, user = 'admin'): Promise<void> => {
+  const photo = await db.clinicalPhotos.get(id);
+  await db.clinicalPhotos.delete(id);
+  if (photo) {
+    await db.auditLogs.add({
+      id: `audit-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      user,
+      action: 'حذف صورة سريرية',
+      target: photo.title || photo.id,
+      details: `تم حذف صورة توثيقية للحالة السنية (${photo.title || photo.id})`,
+    });
+  }
+};
+
+export const deleteClinicalPhoto = deleteClinicalPhotoById;
 

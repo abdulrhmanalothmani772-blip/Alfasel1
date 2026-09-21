@@ -13,6 +13,7 @@ import {
   ClinicSettings,
   CasePayment,
   Branch,
+  ClinicalPhoto,
 } from './types';
 import {
   initializeDatabase,
@@ -47,6 +48,9 @@ import {
   getAllBranches,
   saveBranch,
   deleteBranch,
+  getAllClinicalPhotos,
+  saveClinicalPhoto,
+  deleteClinicalPhoto,
   recordCasePayment,
   exportDatabaseBackup,
 } from './lib/db';
@@ -61,6 +65,7 @@ import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Patients } from './pages/Patients';
 import { Cases } from './pages/Cases';
+import { ClinicalPhotos } from './pages/ClinicalPhotos';
 import { Branches } from './pages/Branches';
 import { DoctorDailySettlement } from './pages/DoctorDailySettlement';
 import { LabExpenses } from './pages/LabExpenses';
@@ -114,6 +119,7 @@ export const App: React.FC = () => {
   const [doctorSettlements, setDoctorSettlements] = useState<DoctorSettlement[]>([]);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [clinicalPhotos, setClinicalPhotos] = useState<ClinicalPhoto[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   // Toast notification state
@@ -159,6 +165,7 @@ export const App: React.FC = () => {
         discList,
         userList,
         branchList,
+        photoList,
       ] = await Promise.all([
         getClinicSettings(),
         getAllPatients(),
@@ -172,6 +179,7 @@ export const App: React.FC = () => {
         getAllDiscounts(),
         getAllUsers(),
         getAllBranches(),
+        getAllClinicalPhotos(),
       ]);
 
       setSettings(s);
@@ -186,6 +194,7 @@ export const App: React.FC = () => {
       setDiscounts(discList);
       setUsers(userList);
       setBranches(branchList);
+      setClinicalPhotos(photoList);
     } catch (error) {
       console.error('Error loading database:', error);
       showToast('حدث خطأ أثناء تحميل البيانات من قاعدة البيانات', 'error');
@@ -401,6 +410,35 @@ export const App: React.FC = () => {
     showToast('تم حذف المستخدم');
   };
 
+  // Clinical Photos Handlers
+  const handleSaveClinicalPhoto = async (photo: ClinicalPhoto) => {
+    try {
+      await saveClinicalPhoto(photo, currentUser?.fullName || currentUser?.username || 'admin');
+      setClinicalPhotos((prev) => {
+        const idx = prev.findIndex((p) => p.id === photo.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = photo;
+          return next;
+        }
+        return [photo, ...prev];
+      });
+      showToast('تم حفظ وتوثيق الصورة السريرية بنجاح');
+    } catch (err: any) {
+      showToast('فشل في حفظ الصورة: ' + (err?.message || 'خطأ غير معروف'), 'error');
+    }
+  };
+
+  const handleDeleteClinicalPhoto = async (id: string) => {
+    try {
+      await deleteClinicalPhoto(id, currentUser?.fullName || currentUser?.username || 'admin');
+      setClinicalPhotos((prev) => prev.filter((p) => p.id !== id));
+      showToast('تم حذف الصورة التوثيقية بنجاح');
+    } catch (err: any) {
+      showToast('فشل في حذف الصورة: ' + (err?.message || 'خطأ غير معروف'), 'error');
+    }
+  };
+
   // Navigating to New Case with a specific patient pre-selected
   const handleOpenNewCaseForPatient = (patient: Patient) => {
     setPreselectedPatientForCase(patient);
@@ -499,6 +537,7 @@ export const App: React.FC = () => {
               patients={patients}
               cases={cases}
               currentUser={currentUser}
+              clinicalPhotos={clinicalPhotos}
               onAddPatient={handleAddPatient}
               onUpdatePatient={handleUpdatePatient}
               onArchivePatient={handleArchivePatient}
@@ -510,6 +549,20 @@ export const App: React.FC = () => {
                   data: { dentalCase: c, settings },
                 })
               }
+              onSavePhoto={handleSaveClinicalPhoto}
+              onDeletePhoto={handleDeleteClinicalPhoto}
+            />
+          )}
+
+          {activePage === 'clinical-photos' && (
+            <ClinicalPhotos
+              photos={clinicalPhotos}
+              patients={patients}
+              cases={cases}
+              currentUser={currentUser}
+              activeBranchId={activeBranchId}
+              onSavePhoto={handleSaveClinicalPhoto}
+              onDeletePhoto={handleDeleteClinicalPhoto}
             />
           )}
 
@@ -521,7 +574,11 @@ export const App: React.FC = () => {
               discounts={discounts}
               settings={settings}
               currentUser={currentUser}
+              branches={branches}
+              activeBranchId={activeBranchId}
               preselectedPatient={preselectedPatientForCase}
+              clinicalPhotos={clinicalPhotos}
+              onSavePhoto={handleSaveClinicalPhoto}
               onAddCase={handleAddCase}
               onUpdateCase={handleUpdateCase}
               onDeleteCase={handleDeleteCase}

@@ -1,16 +1,21 @@
 package com.example
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
+import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.addCallback
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -19,13 +24,34 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
 
+  private var webView: WebView? = null
+
+  private val requestCameraPermissionLauncher =
+    registerForActivityResult(ActivityResultContracts.RequestPermission()) { _ ->
+      // Permission result handled
+    }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
+
+    if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+      requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+    }
+
+    onBackPressedDispatcher.addCallback(this) {
+      if (webView?.canGoBack() == true) {
+        webView?.goBack()
+      } else {
+        finish()
+      }
+    }
+
     setContent {
       MyApplicationTheme {
         Surface(
@@ -35,7 +61,7 @@ class MainActivity : ComponentActivity() {
             .imePadding(),
           color = Color(0xFFF8FAFC)
         ) {
-          DentalClinicWebView()
+          DentalClinicWebView(onWebViewCreated = { webView = it })
         }
       }
     }
@@ -44,7 +70,10 @@ class MainActivity : ComponentActivity() {
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun DentalClinicWebView(modifier: Modifier = Modifier) {
+fun DentalClinicWebView(
+  modifier: Modifier = Modifier,
+  onWebViewCreated: (WebView) -> Unit = {}
+) {
   AndroidView(
     modifier = modifier.fillMaxSize(),
     factory = { context ->
@@ -62,6 +91,7 @@ fun DentalClinicWebView(modifier: Modifier = Modifier) {
           allowContentAccess = true
           allowFileAccessFromFileURLs = true
           allowUniversalAccessFromFileURLs = true
+          mediaPlaybackRequiresUserGesture = false
           cacheMode = WebSettings.LOAD_DEFAULT
           loadWithOverviewMode = true
           useWideViewPort = true
@@ -73,6 +103,12 @@ fun DentalClinicWebView(modifier: Modifier = Modifier) {
         webViewClient = object : WebViewClient() {}
 
         webChromeClient = object : WebChromeClient() {
+          override fun onPermissionRequest(request: PermissionRequest?) {
+            post {
+              request?.grant(request.resources)
+            }
+          }
+
           override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
             android.util.Log.d(
               "AlFaisalWeb",
@@ -83,7 +119,9 @@ fun DentalClinicWebView(modifier: Modifier = Modifier) {
         }
 
         loadUrl("file:///android_asset/web/index.html")
+        onWebViewCreated(this)
       }
     }
   )
 }
+

@@ -256,3 +256,21 @@ export interface ClinicSettings {
   };
   reception24hLock?: boolean;
 }
+
+export type PhotoStage = 'before' | 'during' | 'after' | 'xray' | 'other';
+
+export interface ClinicalPhoto {
+  id: string;
+  patientId: string;
+  patientName?: string;
+  caseId?: string;
+  photoUrl: string; // base64 or blob URL
+  stage: PhotoStage;
+  title: string;
+  notes?: string;
+  teethNumbers?: string[];
+  date: string; // YYYY-MM-DD
+  createdAt: string;
+  takenBy: string;
+  branchId?: string;
+}

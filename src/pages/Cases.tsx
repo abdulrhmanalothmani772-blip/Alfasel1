@@ -9,6 +9,7 @@ import {
   User,
   ClinicSettings,
   Branch,
+  ClinicalPhoto,
 } from '../types';
 import {
   calculateCaseFinancials,
@@ -16,6 +17,7 @@ import {
   formatCurrency,
 } from '../lib/calc';
 import { DentalChart } from '../components/DentalChart';
+import { DentalCameraModal } from '../components/DentalCameraModal';
 import {
   Stethoscope,
   Plus,
@@ -36,6 +38,7 @@ import {
   Building2,
   LayoutGrid,
   Table as TableIcon,
+  Camera,
 } from 'lucide-react';
 
 interface CasesProps {
@@ -55,6 +58,8 @@ interface CasesProps {
   onSelectPrintInvoice: (dentalCase: DentalCase) => void;
   onSelectPrintCaseSummary: (dentalCase: DentalCase) => void;
   preselectedPatient?: Patient | null;
+  clinicalPhotos?: ClinicalPhoto[];
+  onSavePhoto?: (photo: ClinicalPhoto) => Promise<void>;
 }
 
 export const Cases: React.FC<CasesProps> = ({
@@ -74,6 +79,8 @@ export const Cases: React.FC<CasesProps> = ({
   onSelectPrintInvoice,
   onSelectPrintCaseSummary,
   preselectedPatient,
+  clinicalPhotos = [],
+  onSavePhoto,
 }) => {
   const isAdmin = currentUser.role === 'admin';
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,6 +90,8 @@ export const Cases: React.FC<CasesProps> = ({
   const [branchFilter, setBranchFilter] = useState<string>(activeBranchId || 'all');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [quickFilter, setQuickFilter] = useState<'all' | 'unpaid' | 'paid' | 'today'>('all');
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraTarget, setCameraTarget] = useState<{ patient: Patient | null; caseId: string } | null>(null);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(!!preselectedPatient);
@@ -721,6 +730,18 @@ export const Cases: React.FC<CasesProps> = ({
                         سجلها: {c.createdBy || 'الاستقبال'}
                       </span>
                       <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const patient = patients.find((p) => p.id === c.patientId);
+                            setCameraTarget({ patient: patient || null, caseId: c.id });
+                            setIsCameraOpen(true);
+                          }}
+                          className="p-1.5 text-cyan-600 hover:bg-cyan-50 rounded-lg transition-colors cursor-pointer"
+                          title="التقاط وتوثيق صورة بالكاميرا لهذه الحالة"
+                        >
+                          <Camera className="w-4 h-4" />
+                        </button>
                         {editable ? (
                           <>
                             <button
@@ -1396,6 +1417,27 @@ export const Cases: React.FC<CasesProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Dental Camera Modal */}
+      {isCameraOpen && cameraTarget && onSavePhoto && (
+        <DentalCameraModal
+          isOpen={isCameraOpen}
+          onClose={() => {
+            setIsCameraOpen(false);
+            setCameraTarget(null);
+          }}
+          patients={patients}
+          cases={cases}
+          preselectedPatientId={cameraTarget.patient?.id}
+          preselectedCaseId={cameraTarget.caseId}
+          currentUser={currentUser}
+          onSavePhoto={async (photo) => {
+            await onSavePhoto(photo);
+            setIsCameraOpen(false);
+            setCameraTarget(null);
+          }}
+        />
       )}
     </div>
   );
